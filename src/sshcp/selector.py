@@ -1,16 +1,9 @@
-"""Interactive arrow-key navigation selector using rich."""
+"""Interactive selector using simple-term-menu."""
 
-import sys
-import tty
-import termios
 from dataclasses import dataclass
 from typing import Generic, TypeVar, Callable
 
-from rich.console import Console
-from rich.live import Live
-from rich.panel import Panel
-from rich.table import Table
-from rich.text import Text
+from simple_term_menu import TerminalMenu
 
 T = TypeVar("T")
 
@@ -22,21 +15,6 @@ class SelectOption(Generic[T]):
     label: str
     value: T
     description: str = ""
-
-
-def get_key() -> str:
-    """Read a single keypress from stdin."""
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-        # Handle arrow keys (escape sequences)
-        if ch == "\x1b":
-            ch += sys.stdin.read(2)
-        return ch
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 
 
 def interactive_select(
@@ -57,75 +35,52 @@ def interactive_select(
     if not options:
         return None
 
-    console = Console()
-    selected_idx = 0
+    def truncate(s: str, width: int) -> str:
+        """Truncate string to width with ellipsis."""
+        if len(s) <= width:
+            return s.ljust(width)
+        return s[:width-1] + "…"
 
-    def render() -> Panel:
-        """Render the current selection state."""
-        table = Table(
-            show_header=columns is not None,
-            header_style="bold cyan",
-            box=None,
-            padding=(0, 2),
-            expand=True,
-        )
+    # Build menu entries
+    if columns:
+        # Calculate column widths
+        col_widths = []
+        for i, (header, getter) in enumerate(columns):
+            max_width = len(header)
+            for opt in options:
+                val = getter(opt.value)
+                max_width = max(max_width, len(val))
+            col_widths.append(min(max_width, 25))
 
-        # Add columns
-        table.add_column("", width=2)  # Selection indicator
-        if columns:
-            for header, _ in columns:
-                table.add_column(header)
-        else:
-            table.add_column("Option")
+        # Build formatted entries
+        menu_entries = []
+        for opt in options:
+            row = ""
+            for j, (_, getter) in enumerate(columns):
+                val = truncate(getter(opt.value), col_widths[j])
+                row += val + "  "
+            menu_entries.append(row.rstrip())
+    else:
+        menu_entries = [opt.label for opt in options]
 
-        # Add rows
-        for i, opt in enumerate(options):
-            is_selected = i == selected_idx
-            indicator = "[bold cyan]▸[/bold cyan]" if is_selected else " "
-            style = "bold white on grey23" if is_selected else ""
+    # Create terminal menu
+    terminal_menu = TerminalMenu(
+        menu_entries,
+        title=f"\n  {title}\n",
+        menu_cursor="▸ ",
+        menu_cursor_style=("fg_cyan", "bold"),
+        menu_highlight_style=("standout",),
+        cycle_cursor=True,
+        clear_screen=False,
+    )
 
-            if columns:
-                row_values = [getter(opt.value) for _, getter in columns]
-                table.add_row(indicator, *row_values, style=style)
-            else:
-                table.add_row(indicator, opt.label, style=style)
+    # Show menu and get selection
+    selected_index = terminal_menu.show()
 
-        # Build help text
-        help_text = Text()
-        help_text.append("↑/↓", style="bold cyan")
-        help_text.append(" navigate  ", style="dim")
-        help_text.append("Enter", style="bold cyan")
-        help_text.append(" select  ", style="dim")
-        help_text.append("q/Esc", style="bold cyan")
-        help_text.append(" cancel", style="dim")
+    if selected_index is None:
+        return None
 
-        # Combine table and help
-        content = Table.grid(expand=True)
-        content.add_row(table)
-        content.add_row("")
-        content.add_row(help_text)
-
-        return Panel(
-            content,
-            title=f"[bold]{title}[/bold]",
-            border_style="cyan",
-            padding=(1, 2),
-        )
-
-    with Live(render(), console=console, refresh_per_second=30, transient=True) as live:
-        while True:
-            key = get_key()
-
-            if key in ("\x1b[A", "k"):  # Up arrow or k
-                selected_idx = (selected_idx - 1) % len(options)
-            elif key in ("\x1b[B", "j"):  # Down arrow or j
-                selected_idx = (selected_idx + 1) % len(options)
-            elif key in ("\r", "\n"):  # Enter
-                return options[selected_idx].value
-            elif key in ("q", "\x1b", "\x03"):  # q, Escape, Ctrl+C
-                return None
-
-            live.update(render())
+    return options[selected_index].value
 
 
 def confirm_prompt(
@@ -143,31 +98,21 @@ def confirm_prompt(
     Returns:
         The selected value, or None if cancelled.
     """
-    console = Console()
+    menu_entries = [f"[{key}] {label}" for key, label, _ in options]
 
-    # Build options display
-    options_text = Text()
-    for i, (key, label, _) in enumerate(options):
-        if i > 0:
-            options_text.append("  ")
-        options_text.append(f"[{key}]", style="bold cyan")
-        options_text.append(f" {label}", style="dim" if i != default else "")
-
-    panel = Panel(
-        f"{message}\n\n{options_text}",
-        border_style="yellow",
-        padding=(1, 2),
+    terminal_menu = TerminalMenu(
+        menu_entries,
+        title=f"\n  {message}\n",
+        menu_cursor="▸ ",
+        menu_cursor_style=("fg_cyan", "bold"),
+        menu_highlight_style=("standout",),
+        cycle_cursor=True,
+        clear_screen=False,
     )
-    console.print(panel)
 
-    # Wait for key
-    while True:
-        key = get_key().lower()
+    selected_index = terminal_menu.show()
 
-        for opt_key, _, value in options:
-            if key == opt_key.lower():
-                return value
+    if selected_index is None:
+        return None
 
-        if key in ("\x1b", "\x03"):  # Escape or Ctrl+C
-            return None
-
+    return options[selected_index][2]

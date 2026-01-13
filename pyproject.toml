@@ -8,6 +8,7 @@ dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
     "watchfiles>=0.21.0",
+    "simple-term-menu>=1.6.0",
 ]
 
 [project.scripts]

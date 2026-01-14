@@ -1,6 +1,6 @@
 [project]
 name = "sshcp"
-version = "0.2.0"
+version = "0.2.1"
 description = "Easy SSH file copy CLI tool with persistent server selection"
 readme = "README.md"
 requires-python = ">=3.10"

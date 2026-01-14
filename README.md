@@ -1,5 +1,12 @@
 # sshcp
 
+[![npm version](https://img.shields.io/npm/v/sshcp.svg)](https://www.npmjs.com/package/sshcp)
+[![npm downloads](https://img.shields.io/npm/dm/sshcp.svg)](https://www.npmjs.com/package/sshcp)
+[![PyPI version](https://img.shields.io/pypi/v/sshcp.svg)](https://pypi.org/project/sshcp/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/sshcp.svg)](https://pypi.org/project/sshcp/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub stars](https://img.shields.io/github/stars/shubham8550/sshcp.svg)](https://github.com/shubham8550/sshcp/stargazers)
+
 Easy SSH file copy CLI tool with persistent server selection, bookmarks, rsync sync, and 2-way watch mode.
 
 No more typing long `scp user@host:/path/to/file` commands. Just select your server once and copy files with ease.

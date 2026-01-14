@@ -15,23 +15,38 @@ No more typing long `scp user@host:/path/to/file` commands. Just select your ser
 
 ## Installation
 
-### Using uv (recommended)
+### Using npx (easiest)
 
 ```bash
-cd sshcp
-uv sync
+npx sshcp --help
+npx sshcp set
+```
 
-# Run directly
-uv run sshcp --help
+> Requires Python and [uv](https://docs.astral.sh/uv/) or pipx installed.
+
+### Using uv (recommended for Python users)
+
+```bash
+# Run without installing
+uvx sshcp --help
 
 # Or install globally
-uv tool install .
+uv tool install sshcp
 ```
 
 ### Using pip
 
 ```bash
-pip install .
+pip install sshcp
+```
+
+### From source
+
+```bash
+git clone https://github.com/shubham8550/sshcp.git
+cd sshcp
+uv sync
+uv run sshcp --help
 ```
 
 ## Quick Start

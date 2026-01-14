@@ -4,17 +4,35 @@ import os
 import subprocess
 import threading
 import time
-from collections import deque
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+import pathspec
 from rich.console import Console
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 from watchdog.observers import Observer
 
 from sshcp.config import get_selected_host
+
+# Default patterns to always ignore
+DEFAULT_IGNORE_PATTERNS = [
+    ".git/",
+    ".git/**",
+    "__pycache__/",
+    "__pycache__/**",
+    "*.pyc",
+    ".DS_Store",
+    "*.swp",
+    "*.swo",
+    ".venv/",
+    ".venv/**",
+    "node_modules/",
+    "node_modules/**",
+    ".env",
+    "*.log",
+]
 
 
 @dataclass
@@ -84,6 +102,8 @@ class WatchSession:
         console: Console,
         on_conflict: Callable[[ConflictInfo], str] | None = None,
         debounce_seconds: float = 0.5,
+        use_gitignore: bool = True,
+        extra_ignore_patterns: list[str] | None = None,
     ):
         """Initialize watch session.
 
@@ -94,6 +114,8 @@ class WatchSession:
             console: Rich console for output.
             on_conflict: Callback for conflict resolution.
             debounce_seconds: Time to wait for batching changes.
+            use_gitignore: Whether to respect .gitignore patterns.
+            extra_ignore_patterns: Additional patterns to ignore.
         """
         self.local_path = Path(local_path).resolve()
         self.remote_path = remote_path
@@ -116,6 +138,51 @@ class WatchSession:
 
         # Observer for watchdog
         self.observer: Observer | None = None
+
+        # Initialize ignore patterns
+        self.ignore_spec = self._load_ignore_patterns(
+            use_gitignore, extra_ignore_patterns or []
+        )
+
+    def _load_ignore_patterns(
+        self, use_gitignore: bool, extra_patterns: list[str]
+    ) -> pathspec.PathSpec:
+        """Load ignore patterns from various sources."""
+        patterns = list(DEFAULT_IGNORE_PATTERNS)
+
+        if use_gitignore:
+            # Load .gitignore
+            gitignore_path = self.local_path / ".gitignore"
+            if gitignore_path.exists():
+                try:
+                    with open(gitignore_path, "r") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                patterns.append(line)
+                except OSError:
+                    pass
+
+            # Load .sshcpignore (custom ignore file)
+            sshcpignore_path = self.local_path / ".sshcpignore"
+            if sshcpignore_path.exists():
+                try:
+                    with open(sshcpignore_path, "r") as f:
+                        for line in f:
+                            line = line.strip()
+                            if line and not line.startswith("#"):
+                                patterns.append(line)
+                except OSError:
+                    pass
+
+        # Add extra patterns
+        patterns.extend(extra_patterns)
+
+        return pathspec.PathSpec.from_lines("gitwildmatch", patterns)
+
+    def _is_ignored(self, relative_path: str) -> bool:
+        """Check if a path should be ignored."""
+        return self.ignore_spec.match_file(relative_path)
 
     def _get_relative_path(self, full_path: str | Path) -> str:
         """Get path relative to local_path."""
@@ -228,6 +295,10 @@ class WatchSession:
             relative_path = self._get_relative_path(full_path)
         except ValueError:
             return  # Path not under local_path
+
+        # Skip ignored files
+        if self._is_ignored(relative_path):
+            return
 
         # Skip if currently syncing this file
         if relative_path in self.syncing_files:
@@ -367,6 +438,9 @@ class WatchSession:
                     parts = line.split("|")
                     if len(parts) >= 3:
                         relative_path = parts[0]
+                        # Skip ignored files
+                        if self._is_ignored(relative_path):
+                            continue
                         mtime = float(parts[1])
                         size = int(parts[2])
                         current_remote[relative_path] = FileInfo(
@@ -451,6 +525,9 @@ class WatchSession:
                 if path.is_file():
                     try:
                         relative_path = self._get_relative_path(path)
+                        # Skip ignored files
+                        if self._is_ignored(relative_path):
+                            continue
                         stat = path.stat()
                         self.local_state[relative_path] = FileInfo(
                             path=relative_path,
@@ -481,6 +558,9 @@ class WatchSession:
                     parts = line.split("|")
                     if len(parts) >= 3:
                         relative_path = parts[0]
+                        # Skip ignored files
+                        if self._is_ignored(relative_path):
+                            continue
                         mtime = float(parts[1])
                         size = int(parts[2])
                         self.remote_state[relative_path] = FileInfo(

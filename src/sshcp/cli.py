@@ -334,11 +334,26 @@ def watch(
         "-c",
         help="Conflict resolution: ask, local, remote, newer, skip",
     ),
+    gitignore: bool = typer.Option(
+        True,
+        "--gitignore/--no-gitignore",
+        "-g/-G",
+        help="Respect .gitignore patterns (default: enabled)",
+    ),
+    ignore: list[str] = typer.Option(
+        [],
+        "--ignore",
+        "-x",
+        help="Additional patterns to ignore (can be used multiple times)",
+    ),
 ):
     """Watch local directory and sync changes bidirectionally.
 
     Monitors the local directory for file changes and syncs them to the remote.
     Also periodically polls the remote for changes and syncs them locally.
+
+    By default, respects .gitignore and .sshcpignore patterns. Common patterns
+    like .git/, node_modules/, __pycache__/, .env are always ignored.
 
     Conflict Resolution Modes:
         ask    - Prompt user for each conflict (default)
@@ -348,10 +363,10 @@ def watch(
         skip   - Skip conflicting files
 
     Examples:
-        sshcp watch ./src /var/www/app              # Watch and sync (ask on conflict)
-        sshcp watch ./project @deploy               # Use bookmark
-        sshcp watch ./src /app --on-conflict local  # Always use local on conflict
-        sshcp watch ./src /app -c newer             # Keep newer version
+        sshcp watch ./src /var/www/app                  # Watch with gitignore
+        sshcp watch ./src /app --no-gitignore           # Ignore nothing
+        sshcp watch ./src /app -x "*.tmp" -x "cache/"   # Extra ignore patterns
+        sshcp watch ./src /app --on-conflict local      # Always use local on conflict
     """
     host_name = get_selected_host()
     if host_name is None:
@@ -402,6 +417,8 @@ def watch(
         host=host_name,
         console=console,
         on_conflict=handle_conflict,
+        use_gitignore=gitignore,
+        extra_ignore_patterns=list(ignore),
     )
 
     try:

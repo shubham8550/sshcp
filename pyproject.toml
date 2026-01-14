@@ -1,13 +1,13 @@
 [project]
 name = "sshcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "Easy SSH file copy CLI tool with persistent server selection"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "typer>=0.9.0",
     "rich>=13.0.0",
-    "watchfiles>=0.21.0",
+    "watchdog>=4.0.0",
     "simple-term-menu>=1.6.0",
 ]
 
